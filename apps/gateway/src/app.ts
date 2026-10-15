@@ -84,6 +84,64 @@ export function buildApp() {
     });
   });
 
+  app.patch("/admin/upstreams/:id", async (request, reply) => {
+    const params = z.object({ id: z.string().trim().min(1).max(100) });
+    const body = z.object({
+      name: z.string().trim().min(1).max(200).optional(),
+      url: z.string().url().refine((value) => {
+        const protocol = new URL(value).protocol;
+        return protocol === "http:" || protocol === "https:";
+      }, "URL must use HTTP or HTTPS").optional(),
+      enabled: z.boolean().optional(),
+    }).refine((value) => Object.keys(value).length > 0, {
+      message: "At least one field must be provided",
+    });
+
+    const parsedParams = params.safeParse(request.params);
+    const parsedBody = body.safeParse(request.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      return reply.code(400).send({ error: "Invalid upstream update" });
+    }
+
+    const existing = upstreamRegistry.get(parsedParams.data.id);
+    if (!existing) {
+      return reply.code(404).send({ error: "Upstream server was not found" });
+    }
+
+    const id = parsedParams.data.id;
+
+    try {
+      await upstreamConnections.disconnect(id);
+    } catch (error) {
+      request.log.warn({ id, error }, "Failed to close the previous upstream connection");
+    }
+
+    let updated = upstreamRegistry.update(id, parsedBody.data);
+
+    if (updated.config.enabled) {
+      try {
+        await upstreamConnections.connect(updated.config);
+        upstreamRegistry.setHealth(id, "connected");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown connection error";
+        upstreamRegistry.setHealth(id, "unreachable", message);
+      }
+    }
+
+    updated = upstreamRegistry.get(id)!;
+
+    return reply.code(200).send({
+      id: updated.config.id,
+      name: updated.config.name,
+      url: updated.config.url,
+      enabled: updated.config.enabled,
+      status: updated.status,
+      ...(updated.lastError ? { lastError: updated.lastError } : {}),
+    });
+  });
+
   app.post("/mcp", async (request, reply) => {
     const mcpServer = new McpServer({
       name: "urumi-gateway",

@@ -106,3 +106,130 @@ test("POST /admin/upstreams rejects duplicate IDs", async () => {
     await app.close();
   }
 });
+
+test("PATCH /admin/upstreams/:id updates an existing upstream", async () => {
+  const app = buildApp();
+  const id = "patch-test-store";
+
+  try {
+    const created = await app.inject({
+      method: "POST",
+      url: "/admin/upstreams",
+      payload: {
+        id,
+        name: "Original Store",
+        url: "http://127.0.0.1:3997/mcp",
+        enabled: false,
+      },
+    });
+    assert.equal(created.statusCode, 201);
+
+    const updated = await app.inject({
+      method: "PATCH",
+      url: `/admin/upstreams/${id}`,
+      payload: { name: "Updated Store" },
+    });
+
+    assert.equal(updated.statusCode, 200);
+    assert.equal(updated.json().name, "Updated Store");
+    assert.equal(updated.json().enabled, false);
+    assert.equal(updated.json().status, "disabled");
+  } finally {
+    await app.close();
+  }
+});
+
+test("PATCH /admin/upstreams/:id rejects invalid updates", async () => {
+  const app = buildApp();
+
+  try {
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/admin/upstreams/missing-store",
+      payload: { url: "file:///tmp/example" },
+    });
+
+    assert.equal(response.statusCode, 400);
+  } finally {
+    await app.close();
+  }
+});
+
+test("PATCH /admin/upstreams/:id returns 404 for a missing upstream", async () => {
+  const app = buildApp();
+
+  try {
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/admin/upstreams/no-such-store",
+      payload: { name: "Updated Store" },
+    });
+
+    assert.equal(response.statusCode, 404);
+  } finally {
+    await app.close();
+  }
+});
+
+test("PATCH /admin/upstreams/:id disables an upstream", async () => {
+  const app = buildApp();
+  const id = "disable-test-store";
+
+  try {
+    const created = await app.inject({
+      method: "POST",
+      url: "/admin/upstreams",
+      payload: {
+        id,
+        name: "Disable Test Store",
+        url: "http://127.0.0.1:3996/mcp",
+        enabled: false,
+      },
+    });
+    assert.equal(created.statusCode, 201);
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/admin/upstreams/${id}`,
+      payload: { enabled: false },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().enabled, false);
+    assert.equal(response.json().status, "disabled");
+  } finally {
+    await app.close();
+  }
+});
+
+test("PATCH /admin/upstreams/:id re-enables an upstream and records failed connection", async () => {
+  const app = buildApp();
+  const id = "reenable-test-store";
+
+  try {
+    const created = await app.inject({
+      method: "POST",
+      url: "/admin/upstreams",
+      payload: {
+        id,
+        name: "Re-enable Test Store",
+        url: "http://127.0.0.1:3995/mcp",
+        enabled: false,
+      },
+    });
+    assert.equal(created.statusCode, 201);
+    assert.equal(created.json().status, "disabled");
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/admin/upstreams/${id}`,
+      payload: { enabled: true },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().enabled, true);
+    assert.equal(response.json().status, "unreachable");
+  } finally {
+    await app.close();
+  }
+});
