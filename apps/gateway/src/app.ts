@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { UpstreamRepository } from "./db/upstream-repository.js";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -8,7 +9,7 @@ import {
   toolAggregator,
 } from "./upstreams/runtime.js";
 
-export function buildApp() {
+export function buildApp(repository?: UpstreamRepository) {
   const app = Fastify({
     logger: true,
   });
@@ -18,16 +19,30 @@ export function buildApp() {
     service: "urumi-gateway",
   }));
 
-  app.get("/admin/upstreams", async () =>
-    upstreamRegistry.list().map((server) => ({
+  app.get("/admin/upstreams", async () => {
+    if (repository) {
+      const configs = await repository.list();
+      return configs.map((config) => {
+        const runtime = upstreamRegistry.get(config.id);
+        return {
+          ...config,
+          status: config.enabled
+            ? runtime?.status ?? "unreachable"
+            : "disabled",
+          ...(runtime?.lastError ? { lastError: runtime.lastError } : {}),
+        };
+      });
+    }
+
+    return upstreamRegistry.list().map((server) => ({
       id: server.config.id,
       name: server.config.name,
       url: server.config.url,
       enabled: server.config.enabled,
       status: server.status,
       ...(server.lastError ? { lastError: server.lastError } : {}),
-    })),
-  );
+    }));
+  });
 
   app.post("/admin/upstreams", async (request, reply) => {
     const schema = z.object({
@@ -50,6 +65,29 @@ export function buildApp() {
           message: issue.message,
         })),
       });
+    }
+
+    if (repository) {
+      try {
+        await repository.create(parsed.data);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Database write failed";
+
+        if (
+          error !== null &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "23505"
+        ) {
+          return reply.code(409).send({
+            error: "An upstream with this ID already exists",
+          });
+        }
+
+        request.log.error({ error }, "Failed to persist upstream configuration");
+        return reply.code(500).send({ error: "Failed to save upstream configuration" });
+      }
     }
 
     let server;
@@ -104,12 +142,30 @@ export function buildApp() {
       return reply.code(400).send({ error: "Invalid upstream update" });
     }
 
-    const existing = upstreamRegistry.get(parsedParams.data.id);
-    if (!existing) {
+    const id = parsedParams.data.id;
+    const existingConfig = repository
+      ? await repository.get(id)
+      : upstreamRegistry.get(id)?.config;
+
+    if (!existingConfig) {
       return reply.code(404).send({ error: "Upstream server was not found" });
     }
 
-    const id = parsedParams.data.id;
+    if (repository) {
+      try {
+        const persisted = await repository.update(id, parsedBody.data);
+        if (!persisted) {
+          return reply.code(404).send({ error: "Upstream server was not found" });
+        }
+      } catch (error) {
+        request.log.error({ id, error }, "Failed to persist upstream update");
+        return reply.code(500).send({ error: "Failed to save upstream configuration" });
+      }
+    }
+
+    if (!upstreamRegistry.get(id)) {
+      upstreamRegistry.register(existingConfig);
+    }
 
     try {
       await upstreamConnections.disconnect(id);
@@ -152,9 +208,11 @@ export function buildApp() {
     }
 
     const id = parsedParams.data.id;
-    const existing = upstreamRegistry.get(id);
+    const existingConfig = repository
+      ? await repository.get(id)
+      : upstreamRegistry.get(id)?.config;
 
-    if (!existing) {
+    if (!existingConfig) {
       return reply.code(404).send({ error: "Upstream server was not found" });
     }
 
@@ -168,6 +226,18 @@ export function buildApp() {
       return reply.code(500).send({
         error: "Failed to close upstream connection; deletion was not completed",
       });
+    }
+
+    if (repository) {
+      try {
+        const deleted = await repository.delete(id);
+        if (!deleted) {
+          return reply.code(404).send({ error: "Upstream server was not found" });
+        }
+      } catch (error) {
+        request.log.error({ id, error }, "Failed to delete persisted upstream");
+        return reply.code(500).send({ error: "Failed to delete upstream configuration" });
+      }
     }
 
     upstreamRegistry.remove(id);
