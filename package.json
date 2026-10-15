@@ -1,0 +1,19 @@
+{
+  "name": "urumi-mcp-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/dashboard",
+    "apps/gateway",
+    "apps/woo-mcp-server",
+    "apps/chat-agent",
+    "packages/shared"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
