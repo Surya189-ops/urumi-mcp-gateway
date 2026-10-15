@@ -1,0 +1,31 @@
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+secrets.yaml
+secrets.yml
+
+# Node.js dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+coverage/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Local editor and OS files
+.DS_Store
+.vscode/
+.idea/
+
+# Local Kubernetes configuration
+.kube/
