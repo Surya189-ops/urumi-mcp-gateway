@@ -142,6 +142,39 @@ export function buildApp() {
     });
   });
 
+  app.delete("/admin/upstreams/:id", async (request, reply) => {
+    const parsedParams = z.object({
+      id: z.string().trim().min(1).max(100),
+    }).safeParse(request.params);
+
+    if (!parsedParams.success) {
+      return reply.code(400).send({ error: "Invalid upstream ID" });
+    }
+
+    const id = parsedParams.data.id;
+    const existing = upstreamRegistry.get(id);
+
+    if (!existing) {
+      return reply.code(404).send({ error: "Upstream server was not found" });
+    }
+
+    try {
+      await upstreamConnections.disconnect(id);
+    } catch (error) {
+      request.log.error(
+        { id, error },
+        "Failed to fully close upstream connection during deletion",
+      );
+      return reply.code(500).send({
+        error: "Failed to close upstream connection; deletion was not completed",
+      });
+    }
+
+    upstreamRegistry.remove(id);
+
+    return reply.code(204).send();
+  });
+
   app.post("/mcp", async (request, reply) => {
     const mcpServer = new McpServer({
       name: "urumi-gateway",

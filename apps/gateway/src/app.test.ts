@@ -233,3 +233,56 @@ test("PATCH /admin/upstreams/:id re-enables an upstream and records failed conne
     await app.close();
   }
 });
+
+test("DELETE /admin/upstreams/:id removes an existing upstream", async () => {
+  const app = buildApp();
+  const id = "delete-test-store";
+
+  try {
+    const created = await app.inject({
+      method: "POST",
+      url: "/admin/upstreams",
+      payload: {
+        id,
+        name: "Delete Test Store",
+        url: "http://127.0.0.1:3994/mcp",
+        enabled: false,
+      },
+    });
+    assert.equal(created.statusCode, 201);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/admin/upstreams/${id}`,
+    });
+
+    assert.equal(deleted.statusCode, 204);
+
+    const listed = await app.inject({
+      method: "GET",
+      url: "/admin/upstreams",
+    });
+
+    assert.equal(
+      listed.json().some((server: { id: string }) => server.id === id),
+      false,
+    );
+  } finally {
+    await app.close();
+  }
+});
+
+test("DELETE /admin/upstreams/:id returns 404 for a missing upstream", async () => {
+  const app = buildApp();
+
+  try {
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/admin/upstreams/does-not-exist",
+    });
+
+    assert.equal(response.statusCode, 404);
+  } finally {
+    await app.close();
+  }
+});

@@ -64,7 +64,21 @@ export class UpstreamConnectionManager {
 
     this.connections.delete(id);
 
-    await connection.client.close();
+    const results = await Promise.allSettled([
+      connection.client.close(),
+      connection.transport.close(),
+    ]);
+
+    const failures = results.filter(
+      (result) => result.status === "rejected",
+    );
+
+    if (failures.length > 0) {
+      throw new Error(
+        `Failed to fully close upstream server "${id}" (${failures.length} cleanup operation(s) failed).`,
+      );
+    }
+
     return true;
   }
 
