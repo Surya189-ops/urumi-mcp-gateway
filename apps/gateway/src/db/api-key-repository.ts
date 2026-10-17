@@ -18,6 +18,8 @@ export interface ApiKeyRepository {
 
   findActiveByHash(keyHash: string): Promise<ApiKeyRecord | undefined>;
 
+  findUserRole(userId: string): Promise<"admin" | "member" | undefined>;
+
   listByUser(userId: string): Promise<ApiKeyRecord[]>;
 
   markUsed(id: string): Promise<void>;

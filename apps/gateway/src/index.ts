@@ -2,32 +2,30 @@ import { buildApp } from "./app.js";
 import { createDatabasePoolFromEnv } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { PostgresUpstreamRepository } from "./db/postgres-upstream-repository.js";
+import { PostgresApiKeyRepository } from "./db/postgres-api-key-repository.js";
 import { restoreUpstreams } from "./upstreams/restore.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
-const isProduction = process.env.NODE_ENV === "production";
 
 const pool = createDatabasePoolFromEnv();
 
-if (isProduction && !pool) {
-  throw new Error("DATABASE_URL is required in production.");
+if (!pool) {
+  throw new Error("DATABASE_URL is required to start the gateway with API-key authentication.");
 }
 
 let app: ReturnType<typeof buildApp> | undefined;
 
 try {
-  if (pool) {
-    await runMigrations(pool);
-    const repository = new PostgresUpstreamRepository(pool);
-    await restoreUpstreams({ repository });
-    app = buildApp(repository);
-  } else {
-    app = buildApp();
-    app.log.warn(
-      "DATABASE_URL is not set; starting without persistent upstream storage.",
-    );
-  }
+  await runMigrations(pool);
+  const repository = new PostgresUpstreamRepository(pool);
+  const apiKeyRepository = new PostgresApiKeyRepository(pool);
+  await restoreUpstreams({ repository });
+  app = buildApp({
+    upstreamRepository: repository,
+    apiKeyRepository,
+    authRequired: true,
+  });
 
   await app.listen({ port, host });
 } catch (error) {

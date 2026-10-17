@@ -67,6 +67,15 @@ export class PostgresApiKeyRepository implements ApiKeyRepository {
     return row ? toRecord(row) : undefined;
   }
 
+  async findUserRole(userId: string): Promise<"admin" | "member" | undefined> {
+    const result = await this.pool.query<{ role: "admin" | "member" }>(
+      "SELECT role FROM users WHERE id = $1",
+      [userId],
+    );
+
+    return result.rows[0]?.role;
+  }
+
   async listByUser(userId: string): Promise<ApiKeyRecord[]> {
     const result = await this.pool.query<ApiKeyRow>(
       `SELECT ${SELECT_FIELDS}

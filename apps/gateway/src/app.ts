@@ -1,5 +1,7 @@
 import Fastify from "fastify";
 import type { UpstreamRepository } from "./db/upstream-repository.js";
+import type { ApiKeyRepository } from "./db/api-key-repository.js";
+import { authenticateApiKey } from "./auth/authenticate-api-key.js";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -9,7 +11,24 @@ import {
   toolAggregator,
 } from "./upstreams/runtime.js";
 
-export function buildApp(repository?: UpstreamRepository) {
+export interface BuildAppOptions {
+  upstreamRepository?: UpstreamRepository;
+  apiKeyRepository?: ApiKeyRepository;
+  authRequired?: boolean;
+}
+
+export function buildApp(
+  options: BuildAppOptions | UpstreamRepository = {},
+) {
+  const normalizedOptions: BuildAppOptions =
+    typeof (options as UpstreamRepository).list === "function"
+      ? { upstreamRepository: options as UpstreamRepository }
+      : options as BuildAppOptions;
+
+  const repository = normalizedOptions.upstreamRepository;
+  const apiKeyRepository = normalizedOptions.apiKeyRepository;
+  const authRequired = normalizedOptions.authRequired ?? false;
+
   const app = Fastify({
     logger: true,
   });
@@ -19,7 +38,61 @@ export function buildApp(repository?: UpstreamRepository) {
     service: "urumi-gateway",
   }));
 
-  app.get("/admin/upstreams", async () => {
+  async function authorizeRequest(
+    authorization: string | undefined,
+    adminOnly = false,
+  ): Promise<
+    | { ok: true; userId: string; apiKeyId: string; role: "admin" | "member" }
+    | { ok: false; statusCode: 401 | 403; error: string }
+  > {
+    if (!authRequired) {
+      return {
+        ok: true,
+        userId: "test-user",
+        apiKeyId: "test-key",
+        role: "admin",
+      };
+    }
+
+    if (!apiKeyRepository) {
+      return {
+        ok: false,
+        statusCode: 401,
+        error: "API-key authentication is not configured",
+      };
+    }
+
+    const result = await authenticateApiKey(authorization, apiKeyRepository);
+    if (!result.authenticated) {
+      return {
+        ok: false,
+        statusCode: result.statusCode,
+        error: result.error,
+      };
+    }
+
+    if (adminOnly && result.identity.role !== "admin") {
+      return {
+        ok: false,
+        statusCode: 403,
+        error: "Administrator role required",
+      };
+    }
+
+    return { ok: true, ...result.identity };
+  }
+
+  app.get("/admin/upstreams", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization,
+      true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
     if (repository) {
       const configs = await repository.list();
       return configs.map((config) => {
@@ -45,6 +118,16 @@ export function buildApp(repository?: UpstreamRepository) {
   });
 
   app.post("/admin/upstreams", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization,
+      true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
     const schema = z.object({
       id: z.string().trim().min(1).max(100),
       name: z.string().trim().min(1).max(200),
@@ -123,6 +206,16 @@ export function buildApp(repository?: UpstreamRepository) {
   });
 
   app.patch("/admin/upstreams/:id", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization,
+      true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
     const params = z.object({ id: z.string().trim().min(1).max(100) });
     const body = z.object({
       name: z.string().trim().min(1).max(200).optional(),
@@ -199,6 +292,16 @@ export function buildApp(repository?: UpstreamRepository) {
   });
 
   app.delete("/admin/upstreams/:id", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization,
+      true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
     const parsedParams = z.object({
       id: z.string().trim().min(1).max(100),
     }).safeParse(request.params);
@@ -246,6 +349,15 @@ export function buildApp(repository?: UpstreamRepository) {
   });
 
   app.post("/mcp", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
     const mcpServer = new McpServer({
       name: "urumi-gateway",
       version: "1.0.0",
