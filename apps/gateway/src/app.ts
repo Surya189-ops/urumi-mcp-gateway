@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import type { UpstreamRepository } from "./db/upstream-repository.js";
 import type { ApiKeyRepository } from "./db/api-key-repository.js";
 import type { UserRepository } from "./db/user-repository.js";
+import type { AuditRepository } from "./db/audit-repository.js";
+import type { UpstreamConnectionManager } from "./upstreams/connection-manager.js";
+import type { ToolAggregator } from "./upstreams/tool-aggregator.js";
 import type { ProvisionedTeamMember } from "./db/provision-team-member.js";
 import { randomUUID } from "node:crypto";
 import { authenticateApiKey } from "./auth/authenticate-api-key.js";
@@ -19,6 +22,9 @@ export interface BuildAppOptions {
   upstreamRepository?: UpstreamRepository;
   apiKeyRepository?: ApiKeyRepository;
   userRepository?: UserRepository;
+  auditRepository?: AuditRepository;
+  upstreamConnectionManager?: Pick<UpstreamConnectionManager, "list" | "get">;
+  toolAggregator?: Pick<ToolAggregator, "listTools">;
   provisionTeamMember?: (input: {
     email: string;
     displayName: string;
@@ -38,6 +44,9 @@ export function buildApp(
   const repository = normalizedOptions.upstreamRepository;
   const apiKeyRepository = normalizedOptions.apiKeyRepository;
   const userRepository = normalizedOptions.userRepository;
+  const auditRepository = normalizedOptions.auditRepository;
+  const connectionManager = normalizedOptions.upstreamConnectionManager ?? upstreamConnections;
+  const aggregator = normalizedOptions.toolAggregator ?? toolAggregator;
   const provisionMember = normalizedOptions.provisionTeamMember;
   const authRequired = normalizedOptions.authRequired ?? false;
 
@@ -385,11 +394,11 @@ export function buildApp(
       }),
     );
 
-    const connections = upstreamConnections.list();
-    const tools = await toolAggregator.listTools(connections);
+    const connections = connectionManager.list();
+    const tools = await aggregator.listTools(connections);
 
     for (const tool of tools) {
-      const connection = upstreamConnections.get(tool.upstreamId);
+      const connection = connectionManager.get(tool.upstreamId);
 
       if (!connection) {
         continue;
@@ -407,6 +416,40 @@ export function buildApp(
             inputSchema,
           },
           async (args) => {
+            const startedAt = Date.now();
+
+            const recordAudit = async (
+              outcome: "success" | "error",
+              errorMessage?: string,
+            ) => {
+              if (!auditRepository) {
+                return;
+              }
+
+              try {
+                await auditRepository.create({
+                  userId: authorization.userId,
+                  upstreamId: tool.upstreamId,
+                  toolName: tool.name,
+                  outcome,
+                  durationMs: Math.max(0, Date.now() - startedAt),
+                  ...(errorMessage ? { errorMessage } : {}),
+                });
+              } catch (auditError) {
+                request.log.error(
+                  {
+                    toolName: tool.name,
+                    upstreamId: tool.upstreamId,
+                    errorType:
+                      auditError instanceof Error
+                        ? auditError.name
+                        : "UnknownError",
+                  },
+                  "Failed to persist tool audit log",
+                );
+              }
+            };
+
             try {
               const result = await connection.client.callTool(
                 {
@@ -418,6 +461,11 @@ export function buildApp(
               );
 
               if (!("content" in result) || !Array.isArray(result.content)) {
+                await recordAudit(
+                  "error",
+                  "Upstream returned a task result instead of a direct tool result.",
+                );
+
                 return {
                   content: [
                     {
@@ -427,6 +475,15 @@ export function buildApp(
                   ],
                   isError: true,
                 };
+              }
+
+              if (result.isError === true) {
+                await recordAudit(
+                  "error",
+                  "Upstream tool returned isError=true.",
+                );
+              } else {
+                await recordAudit("success");
               }
 
               return {
@@ -446,6 +503,8 @@ export function buildApp(
                   : {}),
               };
             } catch (error) {
+              await recordAudit("error", "Upstream tool call failed.");
+
               const message =
                 error instanceof Error ? error.message : "Unknown upstream error";
 

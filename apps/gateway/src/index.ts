@@ -4,6 +4,7 @@ import { runMigrations } from "./db/migrate.js";
 import { PostgresUpstreamRepository } from "./db/postgres-upstream-repository.js";
 import { PostgresApiKeyRepository } from "./db/postgres-api-key-repository.js";
 import { PostgresUserRepository } from "./db/postgres-user-repository.js";
+import { PostgresAuditRepository } from "./db/postgres-audit-repository.js";
 import { provisionTeamMember as provisionTeamMemberWithPool } from "./db/provision-team-member.js";
 import { restoreUpstreams } from "./upstreams/restore.js";
 
@@ -23,11 +24,13 @@ try {
   const repository = new PostgresUpstreamRepository(pool);
   const apiKeyRepository = new PostgresApiKeyRepository(pool);
   const userRepository = new PostgresUserRepository(pool);
+  const auditRepository = new PostgresAuditRepository(pool);
   await restoreUpstreams({ repository });
   app = buildApp({
     upstreamRepository: repository,
     apiKeyRepository,
     userRepository,
+    auditRepository,
     provisionTeamMember: (input) => provisionTeamMemberWithPool(pool, input),
     authRequired: true,
   });
