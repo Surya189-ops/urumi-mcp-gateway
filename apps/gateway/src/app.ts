@@ -389,9 +389,34 @@ export function buildApp(
       {
         description: "Check whether the Urumi MCP gateway is responding.",
       },
-      async () => ({
-        content: [{ type: "text", text: "pong" }],
-      }),
+      async () => {
+        if (auditRepository) {
+          try {
+            await auditRepository.create({
+              userId: authorization.userId,
+              upstreamId: undefined,
+              toolName: "ping",
+              outcome: "success",
+              durationMs: 0,
+            });
+          } catch (auditError) {
+            request.log.error(
+              {
+                toolName: "ping",
+                errorType:
+                  auditError instanceof Error
+                    ? auditError.name
+                    : "UnknownError",
+              },
+              "Failed to persist tool audit log",
+            );
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: "pong" }],
+        };
+      },
     );
 
     const connections = connectionManager.list();

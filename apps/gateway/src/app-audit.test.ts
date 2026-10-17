@@ -143,3 +143,34 @@ test("audit persistence failures do not break successful tool responses", async 
     await app.close();
   }
 });
+
+test("gateway ping calls are audited", async () => {
+  const { app, records } = makeHarness(async () => ({
+    content: [{ type: "text", text: "unused" }],
+  }));
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "ping", arguments: {} },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(records.length, 1);
+    assert.equal(records[0]?.toolName, "ping");
+    assert.equal(records[0]?.outcome, "success");
+    assert.equal(records[0]?.userId, "test-user");
+  } finally {
+    await app.close();
+  }
+});
