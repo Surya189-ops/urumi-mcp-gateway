@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import type { UpstreamRepository } from "./db/upstream-repository.js";
 import type { ApiKeyRepository } from "./db/api-key-repository.js";
 import { authenticateApiKey } from "./auth/authenticate-api-key.js";
+import { generateApiKey } from "./auth/api-key.js";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -475,6 +476,117 @@ export function buildApp(
     } finally {
       await transport.close();
       await mcpServer.close();
+    }
+  });
+
+
+  app.post("/api-keys", async (request, reply) => {
+    const authorization = await authorizeRequest(request.headers.authorization);
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
+    if (!apiKeyRepository) {
+      return reply.code(503).send({ error: "API-key storage is not configured" });
+    }
+
+    const parsed = z.object({
+      name: z.string().trim().min(1).max(100),
+    }).safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "A key name between 1 and 100 characters is required" });
+    }
+
+    const generated = generateApiKey();
+
+    try {
+      const record = await apiKeyRepository.create({
+        id: crypto.randomUUID(),
+        userId: authorization.userId,
+        name: parsed.data.name,
+        keyHash: generated.hash,
+      });
+
+      return reply.code(201).send({
+        id: record.id,
+        name: record.name,
+        key: generated.key,
+        createdAt: record.createdAt,
+        message: "Save this key now. It will not be shown again.",
+      });
+    } catch (error) {
+      request.log.error({ error }, "Failed to create API key");
+      return reply.code(500).send({ error: "Failed to create API key" });
+    }
+  });
+
+  app.get("/api-keys", async (request, reply) => {
+    const authorization = await authorizeRequest(request.headers.authorization);
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
+    if (!apiKeyRepository) {
+      return reply.code(503).send({ error: "API-key storage is not configured" });
+    }
+
+    try {
+      const records = await apiKeyRepository.listByUser(authorization.userId);
+      return records.map((record) => ({
+        id: record.id,
+        name: record.name,
+        createdAt: record.createdAt,
+        lastUsedAt: record.lastUsedAt,
+        revokedAt: record.revokedAt,
+        active: record.revokedAt === null,
+      }));
+    } catch (error) {
+      request.log.error({ error }, "Failed to list API keys");
+      return reply.code(500).send({ error: "Failed to list API keys" });
+    }
+  });
+
+  app.delete("/api-keys/:id", async (request, reply) => {
+    const authorization = await authorizeRequest(request.headers.authorization);
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
+    if (!apiKeyRepository) {
+      return reply.code(503).send({ error: "API-key storage is not configured" });
+    }
+
+    const parsed = z.object({
+      id: z.string().uuid(),
+    }).safeParse(request.params);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid API-key ID" });
+    }
+
+    try {
+      const revoked = await apiKeyRepository.revoke(
+        parsed.data.id,
+        authorization.userId,
+      );
+
+      if (!revoked) {
+        return reply.code(404).send({
+          error: "API key was not found, does not belong to you, or is already revoked",
+        });
+      }
+
+      return reply.code(204).send();
+    } catch (error) {
+      request.log.error({ error }, "Failed to revoke API key");
+      return reply.code(500).send({ error: "Failed to revoke API key" });
     }
   });
 
