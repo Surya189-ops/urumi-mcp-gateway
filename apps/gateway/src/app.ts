@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import type { UpstreamRepository } from "./db/upstream-repository.js";
 import type { ApiKeyRepository } from "./db/api-key-repository.js";
 import type { UserRepository } from "./db/user-repository.js";
+import type { ProvisionedTeamMember } from "./db/provision-team-member.js";
 import { randomUUID } from "node:crypto";
 import { authenticateApiKey } from "./auth/authenticate-api-key.js";
 import { generateApiKey } from "./auth/api-key.js";
@@ -18,6 +19,11 @@ export interface BuildAppOptions {
   upstreamRepository?: UpstreamRepository;
   apiKeyRepository?: ApiKeyRepository;
   userRepository?: UserRepository;
+  provisionTeamMember?: (input: {
+    email: string;
+    displayName: string;
+    keyName?: string;
+  }) => Promise<ProvisionedTeamMember>;
   authRequired?: boolean;
 }
 
@@ -32,6 +38,7 @@ export function buildApp(
   const repository = normalizedOptions.upstreamRepository;
   const apiKeyRepository = normalizedOptions.apiKeyRepository;
   const userRepository = normalizedOptions.userRepository;
+  const provisionMember = normalizedOptions.provisionTeamMember;
   const authRequired = normalizedOptions.authRequired ?? false;
 
   const app = Fastify({
@@ -624,35 +631,43 @@ export function buildApp(
     if (!authorization.ok) {
       return reply.code(authorization.statusCode).send({ error: authorization.error });
     }
-    if (!userRepository) {
-      return reply.code(503).send({ error: "User storage is not configured" });
+    if (!provisionMember) {
+      return reply.code(503).send({
+        error: "Transactional member provisioning is not configured",
+      });
     }
 
     const parsed = z.object({
       email: z.string().trim().email().max(254),
       displayName: z.string().trim().min(1).max(200),
+      keyName: z.string().trim().min(1).max(100).optional(),
     }).safeParse(request.body);
 
     if (!parsed.success) {
       return reply.code(400).send({
-        error: "A valid email and display name between 1 and 200 characters are required",
+        error: "A valid email, display name, and optional key name are required",
       });
     }
 
     try {
-      const user = await userRepository.create({
-        id: randomUUID(),
-        email: parsed.data.email,
-        displayName: parsed.data.displayName,
-        role: "member",
-      });
+      const provisioned = await provisionMember(parsed.data);
+      const { user, apiKey } = provisioned;
       return reply.code(201).send({
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          role: user.role,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        apiKey: {
+          id: apiKey.id,
+          name: apiKey.name,
+          key: apiKey.key,
+          createdAt: apiKey.createdAt,
+        },
+        message: "Save this API key now. It will not be shown again.",
       });
     } catch (error) {
       if (

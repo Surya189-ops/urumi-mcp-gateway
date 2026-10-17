@@ -3,6 +3,8 @@ import { createDatabasePoolFromEnv } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { PostgresUpstreamRepository } from "./db/postgres-upstream-repository.js";
 import { PostgresApiKeyRepository } from "./db/postgres-api-key-repository.js";
+import { PostgresUserRepository } from "./db/postgres-user-repository.js";
+import { provisionTeamMember as provisionTeamMemberWithPool } from "./db/provision-team-member.js";
 import { restoreUpstreams } from "./upstreams/restore.js";
 
 const port = Number(process.env.PORT ?? 3000);
@@ -20,10 +22,13 @@ try {
   await runMigrations(pool);
   const repository = new PostgresUpstreamRepository(pool);
   const apiKeyRepository = new PostgresApiKeyRepository(pool);
+  const userRepository = new PostgresUserRepository(pool);
   await restoreUpstreams({ repository });
   app = buildApp({
     upstreamRepository: repository,
     apiKeyRepository,
+    userRepository,
+    provisionTeamMember: (input) => provisionTeamMemberWithPool(pool, input),
     authRequired: true,
   });
 

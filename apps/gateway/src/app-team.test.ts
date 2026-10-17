@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildApp } from "./app.js";
-import { generateApiKey } from "./auth/api-key.js";
+import { generateApiKey, hasValidApiKeyFormat } from "./auth/api-key.js";
 import type { ApiKeyRepository } from "./db/api-key-repository.js";
 import type { UserRecord, UserRepository } from "./db/user-repository.js";
 
@@ -32,6 +32,7 @@ function harness(
     role?: "admin" | "member";
   }> = [];
   const updated: Array<{ id: string; role: "admin" | "member" }> = [];
+  const provisionedKeys: string[] = [];
 
   const apiKeys: ApiKeyRepository = {
     async create() { throw new Error("Not used"); },
@@ -80,10 +81,36 @@ function harness(
   const app = buildApp({
     apiKeyRepository: apiKeys,
     userRepository: users,
+    provisionTeamMember: async (input) => {
+      created.push({
+        id: memberId,
+        email: input.email,
+        displayName: input.displayName,
+        role: "member",
+      });
+      if (duplicateEmail) {
+        throw Object.assign(new Error("duplicate email"), { code: "23505" });
+      }
+      const generated = generateApiKey();
+      provisionedKeys.push(generated.key);
+      const user = makeUser({
+        email: input.email.trim().toLowerCase(),
+        displayName: input.displayName.trim(),
+      });
+      return {
+        user,
+        apiKey: {
+          id: "44444444-4444-4444-8444-444444444444",
+          name: input.keyName ?? "Team member key",
+          key: generated.key,
+          createdAt: new Date("2026-10-15T12:00:00Z"),
+        },
+      };
+    },
     authRequired: true,
   });
 
-  return { app, key, created, updated };
+  return { app, key, created, updated, provisionedKeys };
 }
 
 test("GET /admin/users lists members for admins", async () => {
@@ -111,9 +138,13 @@ test("POST /admin/users creates a member by default", async () => {
       payload: { email: "NEW@example.com", displayName: " New Member " },
     });
     assert.equal(response.statusCode, 201);
-    assert.equal(response.json().role, "member");
-    assert.equal(response.json().email, "new@example.com");
+    assert.equal(response.json().user.role, "member");
+    assert.equal(response.json().user.email, "new@example.com");
     assert.equal(h.created[0]?.role, "member");
+    assert.equal(hasValidApiKeyFormat(response.json().apiKey.key), true);
+    assert.equal(response.json().apiKey.name, "Team member key");
+    assert.match(response.json().message, /will not be shown again/);
+    assert.equal(h.provisionedKeys[0], response.json().apiKey.key);
   } finally {
     await h.app.close();
   }
