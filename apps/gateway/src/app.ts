@@ -1,6 +1,8 @@
 import Fastify from "fastify";
 import type { UpstreamRepository } from "./db/upstream-repository.js";
 import type { ApiKeyRepository } from "./db/api-key-repository.js";
+import type { UserRepository } from "./db/user-repository.js";
+import { randomUUID } from "node:crypto";
 import { authenticateApiKey } from "./auth/authenticate-api-key.js";
 import { generateApiKey } from "./auth/api-key.js";
 import { z } from "zod";
@@ -15,6 +17,7 @@ import {
 export interface BuildAppOptions {
   upstreamRepository?: UpstreamRepository;
   apiKeyRepository?: ApiKeyRepository;
+  userRepository?: UserRepository;
   authRequired?: boolean;
 }
 
@@ -28,6 +31,7 @@ export function buildApp(
 
   const repository = normalizedOptions.upstreamRepository;
   const apiKeyRepository = normalizedOptions.apiKeyRepository;
+  const userRepository = normalizedOptions.userRepository;
   const authRequired = normalizedOptions.authRequired ?? false;
 
   const app = Fastify({
@@ -587,6 +591,119 @@ export function buildApp(
     } catch (error) {
       request.log.error({ error }, "Failed to revoke API key");
       return reply.code(500).send({ error: "Failed to revoke API key" });
+    }
+  });
+
+
+  app.get("/admin/users", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization, true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({ error: authorization.error });
+    }
+    if (!userRepository) {
+      return reply.code(503).send({ error: "User storage is not configured" });
+    }
+
+    try {
+      const users = await userRepository.list();
+      return users.map(({ id, email, displayName, role, createdAt, updatedAt }) => ({
+        id, email, displayName, role, createdAt, updatedAt,
+      }));
+    } catch (error) {
+      request.log.error({ error }, "Failed to list team members");
+      return reply.code(500).send({ error: "Failed to list team members" });
+    }
+  });
+
+  app.post("/admin/users", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization, true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({ error: authorization.error });
+    }
+    if (!userRepository) {
+      return reply.code(503).send({ error: "User storage is not configured" });
+    }
+
+    const parsed = z.object({
+      email: z.string().trim().email().max(254),
+      displayName: z.string().trim().min(1).max(200),
+    }).safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "A valid email and display name between 1 and 200 characters are required",
+      });
+    }
+
+    try {
+      const user = await userRepository.create({
+        id: randomUUID(),
+        email: parsed.data.email,
+        displayName: parsed.data.displayName,
+        role: "member",
+      });
+      return reply.code(201).send({
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      });
+    } catch (error) {
+      if (
+        error !== null && typeof error === "object" &&
+        "code" in error && error.code === "23505"
+      ) {
+        return reply.code(409).send({ error: "A user with this email already exists" });
+      }
+      request.log.error({ error }, "Failed to create team member");
+      return reply.code(500).send({ error: "Failed to create team member" });
+    }
+  });
+
+  app.patch("/admin/users/:id/role", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization, true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({ error: authorization.error });
+    }
+    if (!userRepository) {
+      return reply.code(503).send({ error: "User storage is not configured" });
+    }
+
+    const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+    const body = z.object({
+      role: z.enum(["admin", "member"]),
+    }).safeParse(request.body);
+
+    if (!params.success || !body.success) {
+      return reply.code(400).send({ error: "A valid user ID and role are required" });
+    }
+
+    try {
+      const user = await userRepository.updateRole(
+        params.data.id, body.data.role,
+      );
+      if (!user) {
+        return reply.code(404).send({ error: "Team member not found" });
+      }
+      return {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      };
+    } catch (error) {
+      request.log.error({ error }, "Failed to update team member role");
+      return reply.code(500).send({ error: "Failed to update team member role" });
     }
   });
 
