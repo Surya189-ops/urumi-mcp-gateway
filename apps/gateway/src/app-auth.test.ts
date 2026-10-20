@@ -152,3 +152,55 @@ test("health endpoint remains public when authentication is required", async () 
     await app.close();
   }
 });
+
+test("GET /me returns the authenticated identity without exposing the API key", async () => {
+  const generated = generateApiKey();
+  const repository = makeRepository("admin");
+  const app = buildApp({
+    apiKeyRepository: {
+      ...repository,
+      findActiveByHash: async () => ({
+        id: "test-key-id",
+        userId: "test-user-id",
+        name: "Admin key",
+        keyHash: generated.hash,
+        revokedAt: null,
+        lastUsedAt: null,
+        createdAt: new Date(),
+      }),
+    },
+    authRequired: true,
+  });
+
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: "/me",
+      headers: { authorization: `Bearer ${generated.key}` },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      userId: "test-user-id",
+      apiKeyId: "test-key-id",
+      role: "admin",
+    });
+    assert.equal(JSON.stringify(response.json()).includes(generated.key), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("GET /me rejects missing credentials", async () => {
+  const app = buildApp({
+    apiKeyRepository: makeRepository(),
+    authRequired: true,
+  });
+
+  try {
+    const response = await app.inject({ method: "GET", url: "/me" });
+    assert.equal(response.statusCode, 401);
+  } finally {
+    await app.close();
+  }
+});

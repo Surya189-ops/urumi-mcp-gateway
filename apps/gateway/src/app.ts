@@ -103,6 +103,21 @@ export function buildApp(
     return { ok: true, ...result.identity };
   }
 
+  app.get("/me", async (request, reply) => {
+    const authorization = await authorizeRequest(request.headers.authorization);
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
+    return {
+      userId: authorization.userId,
+      apiKeyId: authorization.apiKeyId,
+      role: authorization.role,
+    };
+  });
+
   app.get("/admin/upstreams", async (request, reply) => {
     const authorization = await authorizeRequest(
       request.headers.authorization,
