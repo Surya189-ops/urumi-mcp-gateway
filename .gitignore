@@ -29,3 +29,6 @@ temp/
 
 # Local Kubernetes configuration
 .kube/
+
+# TypeScript build metadata
+*.tsbuildinfo
