@@ -806,5 +806,70 @@ export function buildApp(
     }
   });
 
+  app.get("/admin/audit-logs", async (request, reply) => {
+    const authorization = await authorizeRequest(
+      request.headers.authorization, true,
+    );
+    if (!authorization.ok) {
+      return reply.code(authorization.statusCode).send({
+        error: authorization.error,
+      });
+    }
+
+    if (!auditRepository) {
+      return reply.code(503).send({ error: "Audit storage is not configured" });
+    }
+
+    const parsed = z.object({
+      limit: z.coerce.number().int().min(1).max(500).optional(),
+      userId: z.string().uuid().optional(),
+      upstreamId: z.string().trim().min(1).max(200).optional(),
+      outcome: z.enum(["success", "error"]).optional(),
+      from: z.string().datetime({ offset: true }).optional(),
+      to: z.string().datetime({ offset: true }).optional(),
+    }).safeParse(request.query);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Invalid audit-log filters",
+      });
+    }
+
+    const filters = parsed.data;
+    const from = filters.from ? new Date(filters.from) : undefined;
+    const to = filters.to ? new Date(filters.to) : undefined;
+
+    if (from && to && from > to) {
+      return reply.code(400).send({
+        error: "The from date must not be after the to date",
+      });
+    }
+
+    try {
+      const records = await auditRepository.list({
+        limit: filters.limit,
+        userId: filters.userId,
+        upstreamId: filters.upstreamId,
+        outcome: filters.outcome,
+        from,
+        to,
+      });
+
+      return records.map((record) => ({
+        id: record.id,
+        userId: record.userId,
+        upstreamId: record.upstreamId,
+        toolName: record.toolName,
+        outcome: record.outcome,
+        durationMs: record.durationMs,
+        errorMessage: record.errorMessage,
+        createdAt: record.createdAt,
+      }));
+    } catch (error) {
+      request.log.error({ error }, "Failed to list audit logs");
+      return reply.code(500).send({ error: "Failed to list audit logs" });
+    }
+  });
+
   return app;
 }

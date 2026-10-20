@@ -72,20 +72,66 @@ export class PostgresAuditRepository implements AuditRepository {
     return toRecord(row);
   }
 
-  async list(options: { limit?: number; userId?: string } = {}): Promise<AuditLogRecord[]> {
+  async list(options: {
+    limit?: number;
+    userId?: string;
+    upstreamId?: string;
+    outcome?: AuditOutcome;
+    from?: Date;
+    to?: Date;
+  } = {}): Promise<AuditLogRecord[]> {
     const limit = options.limit ?? 100;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
       throw new Error("Audit list limit must be an integer between 1 and 500.");
     }
 
-    const values: unknown[] = [];
-    let where = "";
-
-    if (options.userId) {
-      values.push(options.userId);
-      where = "WHERE user_id = $1";
+    if (
+      options.outcome !== undefined &&
+      options.outcome !== "success" &&
+      options.outcome !== "error"
+    ) {
+      throw new Error("Audit outcome must be success or error.");
     }
 
+    for (const [name, value] of [["from", options.from], ["to", options.to]] as const) {
+      if (value !== undefined && (!(value instanceof Date) || Number.isNaN(value.getTime()))) {
+        throw new Error(`Audit ${name} must be a valid date.`);
+      }
+    }
+
+    if (options.from && options.to && options.from > options.to) {
+      throw new Error("Audit from date must not be after the to date.");
+    }
+
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+
+    if (options.userId !== undefined) {
+      values.push(options.userId);
+      conditions.push(`user_id = $${values.length}`);
+    }
+
+    if (options.upstreamId !== undefined) {
+      values.push(options.upstreamId);
+      conditions.push(`upstream_id = $${values.length}`);
+    }
+
+    if (options.outcome !== undefined) {
+      values.push(options.outcome);
+      conditions.push(`outcome = $${values.length}`);
+    }
+
+    if (options.from !== undefined) {
+      values.push(options.from);
+      conditions.push(`created_at >= $${values.length}`);
+    }
+
+    if (options.to !== undefined) {
+      values.push(options.to);
+      conditions.push(`created_at <= $${values.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     values.push(limit);
 
     const result = await this.pool.query<AuditRow>(

@@ -133,3 +133,65 @@ test("rejects out-of-range list limits", async () => {
     );
   }
 });
+
+test("filters audit entries by upstream, outcome, and date range", async () => {
+  const from = new Date("2026-10-17T00:00:00Z");
+  const to = new Date("2026-10-18T00:00:00Z");
+  const repository = new PostgresAuditRepository(
+    mockPool((sql, values) => {
+      assert.match(sql, /upstream_id = \$1/);
+      assert.match(sql, /outcome = \$2/);
+      assert.match(sql, /created_at >= \$3/);
+      assert.match(sql, /created_at <= \$4/);
+      assert.match(sql, /LIMIT \$5/);
+      assert.match(sql, /ORDER BY created_at DESC, id DESC/);
+      assert.deepEqual(values, ["woo-store", "error", from, to, 25]);
+      return [row];
+    }),
+  );
+
+  assert.equal(
+    (await repository.list({
+      upstreamId: "woo-store",
+      outcome: "error",
+      from,
+      to,
+      limit: 25,
+    })).length,
+    1,
+  );
+});
+
+test("combines user and upstream filters with parameterized values", async () => {
+  const repository = new PostgresAuditRepository(
+    mockPool((sql, values) => {
+      assert.match(sql, /user_id = \$1 AND upstream_id = \$2/);
+      assert.match(sql, /LIMIT \$3/);
+      assert.deepEqual(values, [userId, "woo-store", 100]);
+      return [row];
+    }),
+  );
+
+  assert.equal((await repository.list({ userId, upstreamId: "woo-store" })).length, 1);
+});
+
+test("rejects invalid outcomes and date ranges", async () => {
+  const repository = new PostgresAuditRepository(mockPool(() => []));
+
+  await assert.rejects(
+    repository.list({ outcome: "unknown" as "success" }),
+    /outcome must be success or error/,
+  );
+  await assert.rejects(
+    repository.list({ from: new Date("invalid") }),
+    /from must be a valid date/,
+  );
+  await assert.rejects(
+    repository.list({
+      from: new Date("2026-10-18T00:00:00Z"),
+      to: new Date("2026-10-17T00:00:00Z"),
+    }),
+    /from date must not be after the to date/,
+  );
+});
+

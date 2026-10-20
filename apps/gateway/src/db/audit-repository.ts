@@ -25,5 +25,9 @@ export interface AuditRepository {
   list(options?: {
     limit?: number;
     userId?: string;
+    upstreamId?: string;
+    outcome?: AuditOutcome;
+    from?: Date;
+    to?: Date;
   }): Promise<AuditLogRecord[]>;
 }
