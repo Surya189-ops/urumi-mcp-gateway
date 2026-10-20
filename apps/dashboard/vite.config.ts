@@ -12,6 +12,14 @@ export default defineConfig({
         target: "http://127.0.0.1:3000",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq, req) => {
+            const key = req.headers["x-urumi-api-key"];
+            if (typeof key === "string" && key.length > 0) {
+              proxyReq.setHeader("Authorization", `Bearer ${key}`);
+            }
+          });
+        },
       },
     },
   },

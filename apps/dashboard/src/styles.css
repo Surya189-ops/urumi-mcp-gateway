@@ -71,3 +71,269 @@ p {
   background: #45d6a0;
   box-shadow: 0 0 14px rgb(69 214 160 / 45%);
 }
+
+/* Authenticated dashboard and upstream management */
+.identity-panel {
+  margin-top: 28px;
+}
+
+.identity-panel h2,
+.management-panel h2 {
+  font-size: clamp(24px, 4vw, 34px);
+  letter-spacing: -0.03em;
+}
+
+.identity-details {
+  display: grid;
+  gap: 14px;
+  margin: 24px 0;
+}
+
+.identity-details > div {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #29354b;
+}
+
+.identity-details dt {
+  color: #aab6ca;
+}
+
+.identity-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.role-pill,
+.server-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid #354662;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #c7dcff;
+  background: #192943;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.management-panel {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid #29354b;
+  text-align: left;
+}
+
+.panel-heading,
+.server-list-heading,
+.server-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.panel-heading h2 {
+  margin: 10px 0;
+}
+
+.panel-heading p,
+.server-url,
+.form-hint,
+.empty-state {
+  font-size: 14px;
+}
+
+.server-form {
+  display: grid;
+  gap: 10px;
+  margin: 26px 0;
+  padding: 20px;
+  border: 1px solid #29354b;
+  border-radius: 16px;
+  background: #0d1422;
+}
+
+.server-form h3,
+.server-list-heading h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.login-form label,
+.server-form label {
+  color: #c5d1e4;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.login-form input,
+.server-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #354662;
+  border-radius: 10px;
+  outline: none;
+  background: #0a0e17;
+  color: #e8edf8;
+  font: inherit;
+}
+
+.login-form input:focus,
+.server-form input:focus {
+  border-color: #8bb8ff;
+  box-shadow: 0 0 0 3px rgb(139 184 255 / 12%);
+}
+
+button {
+  cursor: pointer;
+  padding: 11px 15px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #8bb8ff;
+  color: #0a1425;
+  font: inherit;
+  font-weight: 750;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.secondary-button,
+.danger-button {
+  border-color: #354662;
+  background: #172235;
+  color: #e8edf8;
+}
+
+.danger-button {
+  border-color: #633846;
+  background: #321923;
+  color: #ffb6c4;
+}
+
+.server-list-heading {
+  align-items: center;
+  margin: 30px 0 14px;
+}
+
+.server-list-heading span {
+  color: #aab6ca;
+  font-size: 13px;
+}
+
+.server-list {
+  display: grid;
+  gap: 12px;
+}
+
+.server-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #29354b;
+  border-radius: 14px;
+  background: #111a2a;
+}
+
+.server-card h4 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.server-card-heading .mono {
+  margin: 0;
+  color: #aab6ca;
+}
+
+.server-url {
+  overflow-wrap: anywhere;
+}
+
+.status-connected {
+  border-color: #246b55;
+  background: #102e27;
+  color: #79e4bd;
+}
+
+.status-unreachable {
+  border-color: #75434a;
+  background: #351c24;
+  color: #ffb6c4;
+}
+
+.status-disabled {
+  border-color: #49536a;
+  background: #242c3b;
+  color: #c2cada;
+}
+
+.server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.error-message,
+.error-detail {
+  color: #ff9eae;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.success-message {
+  color: #79e4bd;
+  font-size: 13px;
+}
+
+.notice,
+.form-hint {
+  color: #aab6ca;
+}
+
+.empty-state {
+  padding: 20px;
+  border: 1px dashed #354662;
+  border-radius: 12px;
+}
+
+.footer-status {
+  padding-top: 20px;
+  border-top: 1px solid #29354b;
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    padding: 16px 10px;
+  }
+
+  .welcome-card {
+    padding: 24px 18px;
+  }
+
+  .panel-heading {
+    flex-direction: column;
+  }
+
+  .server-card-heading {
+    flex-direction: column;
+  }
+
+  .identity-details > div {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

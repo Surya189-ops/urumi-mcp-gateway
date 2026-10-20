@@ -1,6 +1,7 @@
 import { StrictMode, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import UpstreamsPanel from "./UpstreamsPanel";
 
 type Identity = {
   userId: string;
@@ -22,7 +23,7 @@ function App() {
 
     try {
       const response = await fetch("/api/me", {
-        headers: { Authorization: `Bearer ${apiKey.trim()}` },
+        headers: { "X-Urumi-API-Key": apiKey.trim() },
       });
       const body: unknown = await response.json();
 
@@ -106,9 +107,14 @@ function App() {
               </div>
             </dl>
             <p className="notice">
-              Identity verified. Management panels will be connected in the
-              next steps.
+              Identity verified. Your API key remains in this page's memory.
             </p>
+            {identity.role === "admin" && <UpstreamsPanel apiKey={apiKey.trim()} />}
+            {identity.role === "member" && (
+              <p className="notice">
+                You're signed in as a team member. Administrator controls are unavailable.
+              </p>
+            )}
             <button className="secondary-button" onClick={signOut} type="button">
               Sign out
             </button>
