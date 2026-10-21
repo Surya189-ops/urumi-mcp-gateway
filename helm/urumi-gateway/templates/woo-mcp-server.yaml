@@ -1,0 +1,76 @@
+{{- if .Values.wooMcpServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "urumi-gateway.fullname" . }}-woo-mcp-server
+  labels:
+    app.kubernetes.io/name: woo-mcp-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount.wooMcpServer }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: woo-mcp-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: woo-mcp-server
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: woo-mcp-server
+          image: "{{ .Values.images.wooMcpServer.repository }}:{{ .Values.images.wooMcpServer.tag }}"
+          imagePullPolicy: {{ .Values.images.wooMcpServer.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.wooMcpServer.port }}
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: HOST
+              value: 0.0.0.0
+            - name: PORT
+              value: {{ .Values.service.wooMcpServer.port | quote }}
+            - name: WOOCOMMERCE_URL
+              value: {{ .Values.woocommerce.url | quote }}
+            - name: WOOCOMMERCE_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.woocommerce.existingSecret }}
+                  key: {{ .Values.woocommerce.consumerKeyKey }}
+            - name: WOOCOMMERCE_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.woocommerce.existingSecret }}
+                  key: {{ .Values.woocommerce.consumerSecretKey }}
+          resources:
+            {{- toYaml .Values.resources.wooMcpServer | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.probes.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: woo-mcp-server
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: woo-mcp-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.service.wooMcpServer.port }}
+      targetPort: http
+
+{{- end }}

@@ -1,0 +1,129 @@
+nameOverride: ""
+fullnameOverride: ""
+
+images:
+  gateway:
+    repository: urumi-gateway
+    tag: local
+    pullPolicy: IfNotPresent
+  dashboard:
+    repository: urumi-dashboard
+    tag: local
+    pullPolicy: IfNotPresent
+  wooMcpServer:
+    repository: urumi-woo-mcp-server
+    tag: local
+    pullPolicy: IfNotPresent
+
+wooMcpServer:
+  enabled: true
+
+replicaCount:
+  gateway: 1
+  dashboard: 1
+  wooMcpServer: 1
+
+service:
+  gateway:
+    port: 3000
+  dashboard:
+    port: 5173
+  wooMcpServer:
+    port: 3100
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    gateway: gateway.local
+    dashboard: dashboard.local
+  tls: []
+
+database:
+  host: postgres
+  port: 5432
+  name: urumi
+  user: urumi
+  existingSecret: urumi-database
+  passwordKey: password
+
+woocommerce:
+  url: http://wordpress
+  existingSecret: woocommerce-api
+  consumerKeyKey: consumer-key
+  consumerSecretKey: consumer-secret
+
+gateway:
+  authRequired: true
+  existingSecret: urumi-gateway
+  bootstrapKeyKey: bootstrap-api-key
+  sessionSecretKey: session-secret
+
+resources:
+  gateway:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  dashboard:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  wooMcpServer:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+probes:
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+networkPolicy:
+  enabled: true
+
+wordpress:
+  enabled: true
+  image: wordpress:6.8-apache
+  replicas: 1
+  servicePort: 80
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  database:
+    image: mariadb:11.4
+    name: wordpress
+    user: wordpress
+    existingSecret: wordpress-database
+    rootPasswordKey: root-password
+    passwordKey: password
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
