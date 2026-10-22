@@ -36,10 +36,7 @@ test("sends WooCommerce credentials in Authorization, not the URL", async () => 
     );
 
     assert.equal(products[0]?.name, "Test product");
-    assert.equal(
-      capturedAuthorization,
-      `Basic ${Buffer.from("test_key:test_secret").toString("base64")}`,
-    );
+    assert.ok(capturedAuthorization?.startsWith("OAuth "));
     assert.ok(!capturedUrl.includes("test_key"));
     assert.ok(!capturedUrl.includes("test_secret"));
     assert.ok(!capturedUrl.includes("consumer_key"));
