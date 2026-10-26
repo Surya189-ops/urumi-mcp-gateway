@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Urumi — MCP Gateway</title>
+<style>
+:root {
+  --bg:#0a0d14; --panel:#111722; --panel2:#151e2b;
+  --border:#263244; --text:#eef3fc; --muted:#8e9bb0;
+  --accent:#8b7cff; --green:#45d6a0; --yellow:#f5c76b;
+  --red:#ff7889; --blue:#77baff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font:14px Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+button,input{font:inherit}
+button{cursor:pointer}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:245px;flex-shrink:0;border-right:1px solid var(--border);
+padding:25px 16px;background:#0d111a;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:11px;padding:0 10px 30px}
+.logo{width:37px;height:37px;border-radius:12px;display:grid;place-items:center;
+background:linear-gradient(135deg,#a49aff,#6654e9);font-size:22px;font-weight:800}
+.brand strong{font-size:19px;letter-spacing:-.7px}
+.brand small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.section-label{color:#6e7d92;font-size:10px;letter-spacing:1.4px;
+font-weight:700;padding:15px 11px 9px}
+.nav{display:flex;align-items:center;gap:12px;padding:12px 13px;
+margin:2px 0;border-radius:9px;color:#a7b3c7;cursor:pointer}
+.nav:hover,.nav.active{background:#1b2033;color:#fff}
+.nav.active{box-shadow:inset 3px 0 var(--accent)}
+.nav .ico{width:18px;text-align:center;font-size:16px}
+.nav .count{margin-left:auto;background:#273047;padding:3px 7px;border-radius:6px;font-size:11px}
+.side-bottom{margin-top:auto;border-top:1px solid var(--border);padding:18px 9px 0}
+.user{display:flex;align-items:center;gap:10px}
+.avatar{width:35px;height:35px;border-radius:50%;display:grid;place-items:center;
+background:#35305c;color:#c9c1ff;font-weight:700}
+.user small{display:block;color:var(--muted);margin-top:3px}
+.main{min-width:0;flex:1}
+.topbar{height:73px;border-bottom:1px solid var(--border);display:flex;
+align-items:center;justify-content:space-between;padding:0 34px;gap:15px}
+.crumb{color:var(--muted)}.crumb b{color:var(--text);font-weight:600}
+.top-right{display:flex;align-items:center;gap:12px}
+.status{display:flex;align-items:center;gap:8px;border:1px solid var(--border);
+border-radius:20px;padding:8px 12px;color:#b7c4d5;font-size:12px}
+.dot{width:7px;height:7px;background:var(--green);border-radius:50%;
+box-shadow:0 0 10px #45d6a066}
+.icon-btn{border:1px solid var(--border);background:var(--panel);color:#c6d1e2;
+border-radius:9px;width:36px;height:36px}
+.content{max-width:1450px;margin:auto;padding:33px 34px 50px}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;
+gap:18px;margin-bottom:27px}
+h1{font-size:27px;letter-spacing:-1px;margin:0 0 9px}
+.subtitle{color:var(--muted);line-height:1.6}
+.primary{background:var(--accent);color:white;border:0;border-radius:9px;
+padding:11px 15px;font-weight:650}
+.primary:hover{background:#7666f4}
+.secondary{background:var(--panel2);color:#dbe4f3;border:1px solid var(--border);
+border-radius:9px;padding:10px 13px}
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+.grid{display:grid;gap:16px}
+.stats{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:22px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:13px;
+padding:19px;min-width:0}
+.stat-top{display:flex;justify-content:space-between;align-items:center;color:var(--muted)}
+.stat-icon{width:34px;height:34px;display:grid;place-items:center;
+background:#20263a;border-radius:9px;color:#c1b9ff;font-size:17px}
+.metric{font-size:29px;font-weight:720;letter-spacing:-1px;margin:18px 0 7px}
+.trend{font-size:11px;color:var(--green)}
+.muted{color:var(--muted)}
+.section-head{display:flex;align-items:center;justify-content:space-between;
+gap:15px;margin:29px 0 15px}
+.section-head h2{font-size:16px;margin:0}
+.section-head span{font-size:12px;color:var(--muted)}
+.servers{grid-template-columns:repeat(3,minmax(0,1fr))}
+.server-title{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.server-logo{width:42px;height:42px;border-radius:11px;display:grid;
+place-items:center;background:#25354a;font-size:20px}
+.server-title strong{font-size:14px}
+.server-title small{display:block;color:var(--muted);margin-top:5px;font-size:11px}
+.pill{border:1px solid #285743;background:#143528;color:var(--green);
+border-radius:20px;padding:5px 8px;font-size:10px;white-space:nowrap}
+.server-meta{display:flex;justify-content:space-between;color:var(--muted);
+font-size:12px;padding:13px 0;border-top:1px solid var(--border)}
+.server-footer{display:flex;align-items:center;justify-content:space-between;
+margin-top:7px}
+.text-btn{border:0;background:transparent;color:#b9adff;padding:6px 0}
+.toggle{width:37px;height:21px;border:0;border-radius:20px;background:#344155;
+padding:3px;display:flex;align-items:center}
+.toggle::after{content:"";width:15px;height:15px;background:white;
+border-radius:50%;transition:transform .15s}
+.toggle.on{background:#7566ed}
+.toggle.on::after{transform:translateX(16px)}
+.lower{grid-template-columns:minmax(0,1.45fr) minmax(280px,1fr);margin-top:23px}
+table{border-collapse:collapse;width:100%;text-align:left}
+th{font-size:10px;text-transform:uppercase;letter-spacing:.7px;
+color:#8190a6;font-weight:650}
+th,td{padding:14px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{font-size:12px;color:#c8d2e1}
+td:first-child{color:#f0f4fa;font-weight:550}
+tbody tr:last-child td{border-bottom:0}
+.result{display:inline-flex;align-items:center;gap:6px}
+.result .dot{width:6px;height:6px;box-shadow:none}
+.result.failed{color:var(--red)}.result.failed .dot{background:var(--red)}
+.tool-list{display:flex;flex-direction:column;gap:17px;margin-top:20px}
+.tool{display:flex;align-items:center;gap:11px}
+.tool-icon{width:36px;height:36px;display:grid;place-items:center;
+border:1px solid var(--border);border-radius:9px;background:#192131}
+.tool-info{flex:1;min-width:0}
+.tool-info strong{display:block;font-size:12px;font-weight:600}
+.tool-info small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+.tool-count{font-size:12px;color:#dce4f2}
+.bar{height:4px;background:#252f40;border-radius:10px;margin-top:9px;overflow:hidden}
+.bar i{height:100%;display:block;background:var(--accent);border-radius:10px}
+.table-wrap{overflow-x:auto}
+.view{display:none}.view.active{display:block}
+.banner{border:1px solid #51479a;background:#1b1934;border-radius:10px;
+padding:13px 15px;margin-bottom:20px;color:#d5d0ff;line-height:1.5}
+.banner button{float:right;background:none;color:#d5d0ff;border:0;font-size:17px}
+.search{background:var(--panel);border:1px solid var(--border);border-radius:9px;
+padding:10px 12px;color:var(--text);width:230px;max-width:100%}
+.empty-note{font-size:12px;color:var(--muted);margin-top:12px}
+@media(max-width:1050px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.servers{grid-template-columns:repeat(2,minmax(0,1fr))}.lower{grid-template-columns:1fr}}
+@media(max-width:700px){.sidebar{width:65px;padding:20px 7px}
+.brand{padding:0 6px 25px}.brand>div:last-child,.nav-label,.section-label,
+.nav .count,.side-bottom .user>div:last-child{display:none}
+.nav{justify-content:center;padding:13px 5px}.nav .ico{font-size:18px}
+.side-bottom{padding:15px 2px}.topbar{padding:0 15px;height:62px}
+.content{padding:24px 14px}.page-head{flex-direction:column}
+.stats{gap:9px}.card{padding:14px}.metric{font-size:25px}
+.servers{grid-template-columns:1fr}.top-right .status{display:none}
+h1{font-size:24px}.lower{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="logo">u</div><div><strong>urumi</strong><small>MCP GATEWAY</small></div></div>
+  <div class="section-label">WORKSPACE</div>
+  <div class="nav active" data-view="overview"><span class="ico">▦</span><span class="nav-label">Overview</span></div>
+  <div class="nav" data-view="servers"><span class="ico">◈</span><span class="nav-label">MCP Servers</span><span class="count">3</span></div>
+  <div class="nav" data-view="tools"><span class="ico">⌘</span><span class="nav-label">Tools</span></div>
+  <div class="nav" data-view="audit"><span class="ico">≋</span><span class="nav-label">Audit Logs</span></div>
+  <div class="section-label">ADMINISTRATION</div>
+  <div class="nav" data-view="keys"><span class="ico">⚿</span><span class="nav-label">API Keys</span></div>
+  <div class="nav" data-view="team"><span class="ico">♙</span><span class="nav-label">Team Members</span></div>
+  <div class="nav" data-view="settings"><span class="ico">⚙</span><span class="nav-label">Settings</span></div>
+  <div class="side-bottom"><div class="user"><div class="avatar">A</div><div><strong>Workspace Admin</strong><small>Administrator</small></div></div></div>
+</aside>
+<main class="main">
+<header class="topbar">
+  <div class="crumb">Workspace <span style="color:#536176">/</span> <b id="crumb">Overview</b></div>
+  <div class="top-right"><div class="status"><span class="dot"></span> Gateway operational</div><button class="icon-btn" title="Notifications">♧</button><div class="avatar">A</div></div>
+</header>
+<div class="content">
+  <div id="notice" class="banner">✦ <strong>Welcome to your MCP workspace.</strong> This is a visual preview using sample data. <button onclick="this.parentElement.remove()">×</button></div>
+
+  <section id="overview" class="view active">
+    <div class="page-head"><div><h1>Gateway overview</h1><div class="subtitle">Monitor your MCP infrastructure, connected tools, and activity.</div></div><div class="actions"><button class="secondary" onclick="showView('audit')">View audit logs ↗</button><button class="primary" onclick="showView('servers')">＋ Add server</button></div></div>
+    <div class="grid stats">
+      <div class="card"><div class="stat-top">Connected servers <span class="stat-icon">◈</span></div><div class="metric" id="serverMetric">3 <span style="font-size:14px;color:#718098;font-weight:500">/ 3</span></div><div class="trend">● All configured servers online</div></div>
+      <div class="card"><div class="stat-top">Available tools <span class="stat-icon">⌘</span></div><div class="metric">18</div><div class="muted" style="font-size:12px">Across connected servers</div></div>
+      <div class="card"><div class="stat-top">Tool calls today <span class="stat-icon">↗</span></div><div class="metric">1,284</div><div class="trend">↑ 12.8% <span class="muted">vs. previous day</span></div></div>
+      <div class="card"><div class="stat-top">Success rate <span class="stat-icon">✓</span></div><div class="metric">99.2%</div><div class="muted" style="font-size:12px">Last 24 hours</div></div>
+    </div>
+    <div class="section-head"><h2>Connected MCP servers</h2><span><a href="#" onclick="showView('servers');return false" style="color:#b9adff;text-decoration:none">Manage servers →</a></span></div>
+    <div class="grid servers" id="serverCards"></div>
+    <div class="grid lower">
+      <div class="card"><div class="section-head" style="margin:0 0 7px"><h2>Recent activity</h2><a href="#" onclick="showView('audit');return false" style="color:#b9adff;text-decoration:none;font-size:12px">View all →</a></div>
+        <div class="table-wrap"><table><thead><tr><th>Tool</th><th>User</th><th>Result</th><th>Time</th></tr></thead><tbody id="recentRows"></tbody></table></div>
+      </div>
+      <div class="card"><h2 style="font-size:16px;margin:0">Most used tools</h2><div class="muted" style="font-size:12px;margin-top:7px">Call volume · last 24 hours</div><div class="tool-list" id="popularTools"></div></div>
+    </div>
+  </section>
+
+  <section id="servers" class="view">
+    <div class="page-head"><div><h1>MCP Servers</h1><div class="subtitle">Manage upstream connections and control which tools are available.</div></div><button class="primary" onclick="addServer()">＋ Register server</button></div>
+    <div class="grid servers" id="allServerCards"></div>
+  </section>
+
+  <section id="tools" class="view">
+    <div class="page-head"><div><h1>Tool Registry</h1><div class="subtitle">Discover tools exposed by your connected MCP servers.</div></div></div>
+    <div class="card"><input class="search" id="toolSearch" placeholder="Search tools..." oninput="renderTools()"><div class="table-wrap"><table><thead><tr><th>Tool name</th><th>Upstream</th><th>Description</th><th>Status</th></tr></thead><tbody id="toolRows"></tbody></table></div></div>
+  </section>
+
+  <section id="audit" class="view">
+    <div class="page-head"><div><h1>Audit Logs</h1><div class="subtitle">Track tool calls, access decisions, execution time, and outcomes.</div></div><button class="secondary" onclick="alert('Preview only: connect the gateway audit export endpoint to enable downloads.')">↓ Export logs</button></div>
+    <div class="card"><input class="search" id="auditSearch" placeholder="Search tool, user, or server..." oninput="renderAudit()"><div class="table-wrap"><table><thead><tr><th>Tool</th><th>User</th><th>Upstream</th><th>Duration</th><th>Outcome</th><th>Time</th></tr></thead><tbody id="auditRows"></tbody></table></div><div class="empty-note">Preview data only — connect this screen to the gateway audit API for live events.</div></div>
+  </section>
+
+  <section id="keys" class="view">
+    <div class="page-head"><div><h1>API Keys</h1><div class="subtitle">Manage credentials used by team members and external MCP clients.</div></div><button class="primary" onclick="createKey()">＋ Create API key</button></div>
+    <div class="card"><h2 style="font-size:15px;margin-top:0">Gateway credentials</h2><div class="muted" style="line-height:1.6">Keys should be shown only once, stored as hashes, and revocable by an administrator. Never put upstream secrets in browser code.</div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Owner</th><th>Created</th><th>Last used</th><th>Status</th><th>Action</th></tr></thead><tbody id="keyRows"></tbody></table></div></div>
+  </section>
+
+  <section id="team" class="view">
+    <div class="page-head"><div><h1>Team Members</h1><div class="subtitle">Manage workspace membership and role-based access.</div></div><button class="primary" onclick="alert('Preview only: connect the team invitation endpoint.')">＋ Invite member</button></div>
+    <div class="card"><div class="table-wrap"><table><thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Access</th></tr></thead><tbody><tr><td>Workspace Admin</td><td>admin@example.test</td><td>Admin</td><td><span class="pill">Active</span></td></tr><tr><td>Developer One</td><td>developer@example.test</td><td>Member</td><td><span class="pill">Active</span></td></tr><tr><td>External Client</td><td>mcp-client@example.test</td><td>Member</td><td><span class="pill">Active</span></td></tr></tbody></table></div></div>
+  </section>
+
+  <section id="settings" class="view">
+    <div class="page-head"><div><h1>Workspace Settings</h1><div class="subtitle">Gateway defaults and operational configuration.</div></div></div>
+    <div class="card"><h2 style="font-size:15px">Gateway configuration</h2><div class="server-meta"><span>Gateway status</span><span style="color:var(--green)">Operational</span></div><div class="server-meta"><span>Authentication</span><span>Bearer API keys</span></div><div class="server-meta"><span>Transport</span><span>Streamable HTTP</span></div><div class="server-meta"><span>Audit logging</span><span>Enabled (preview display)</span></div><div class="empty-note">These values are illustrative until connected to live gateway settings.</div></div>
+  </section>
+</div>
+</main>
+</div>
+<script>
+const servers = [
+ {id:"woocommerce",name:"WooCommerce",desc:"Store products and orders",icon:"🛍",url:"http://woo-mcp-server:3100/mcp",tools:5,enabled:true},
+ {id:"github",name:"GitHub MCP",desc:"Repositories and pull requests",icon:"⌘",url:"http://github-mcp:3001/mcp",tools:7,enabled:true},
+ {id:"slack",name:"Slack MCP",desc:"Team messaging and channels",icon:"✳",url:"http://slack-mcp:3002/mcp",tools:6,enabled:true}
+];
+const events=[
+ {tool:"woocommerce__list_orders",user:"Admin",server:"WooCommerce",duration:"124 ms",ok:true,time:"Just now"},
+ {tool:"github__list_repositories",user:"Developer One",server:"GitHub MCP",duration:"208 ms",ok:true,time:"2 min ago"},
+ {tool:"woocommerce__create_product",user:"Admin",server:"WooCommerce",duration:"316 ms",ok:true,time:"5 min ago"},
+ {tool:"slack__search_messages",user:"External Client",server:"Slack MCP",duration:"1.2 s",ok:false,time:"8 min ago"},
+ {tool:"woocommerce__list_products",user:"Developer One",server:"WooCommerce",duration:"98 ms",ok:true,time:"12 min ago"}
+];
+const tools=[
+ ["woocommerce__list_products","WooCommerce","List store products"],
+ ["woocommerce__create_product","WooCommerce","Create a product"],
+ ["woocommerce__list_orders","WooCommerce","List recent orders"],
+ ["woocommerce__get_order","WooCommerce","Retrieve an order by ID"],
+ ["woocommerce__update_order_status","WooCommerce","Update order status"],
+ ["github__list_repositories","GitHub MCP","List repositories"],
+ ["github__get_pull_request","GitHub MCP","Retrieve pull request details"],
+ ["slack__search_messages","Slack MCP","Search workspace messages"]
+];
+let keys=[
+ {name:"Admin dashboard",owner:"Workspace Admin",created:"Oct 20, 2026",last:"Just now",active:true},
+ {name:"External MCP client",owner:"External Client",created:"Oct 21, 2026",last:"8 min ago",active:true}
+];
+function serverCard(s){
+ return `<div class="card"><div class="server-title"><div class="server-logo">${s.icon}</div><div style="flex:1;min-width:0"><strong>${s.name}</strong><small>${s.desc}</small></div><span class="pill" style="${s.enabled?'':'background:#35202a;border-color:#66333e;color:var(--red)'}">${s.enabled?'● Connected':'● Disabled'}</span></div><div class="server-meta"><span>Available tools</span><strong style="color:var(--text)">${s.enabled?s.tools:0}</strong></div><div class="server-meta"><span>Transport</span><span>Streamable HTTP</span></div><div class="server-meta"><span>Endpoint</span><span style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${s.url}</span></div><div class="server-footer"><button class="text-btn" onclick="alert('Preview only. Connect server detail and health endpoints for live data.')">View details →</button><button class="toggle ${s.enabled?'on':''}" title="Toggle server" onclick="toggleServer('${s.id}')"></button></div></div>`;
+}
+function renderServers(){
+ document.getElementById("serverCards").innerHTML=servers.slice(0,3).map(serverCard).join("");
+ document.getElementById("allServerCards").innerHTML=servers.map(serverCard).join("");
+ document.getElementById("serverMetric").innerHTML=servers.filter(s=>s.enabled).length+' <span style="font-size:14px;color:#718098;font-weight:500">/ '+servers.length+'</span>';
+}
+function result(e){return `<span class="result ${e.ok?'':'failed'}"><span class="dot"></span>${e.ok?'Success':'Failed'}</span>`}
+function renderRecent(){
+ document.getElementById("recentRows").innerHTML=events.slice(0,4).map(e=>`<tr><td>${e.tool}</td><td>${e.user}</td><td>${result(e)}</td><td>${e.time}</td></tr>`).join("");
+ document.getElementById("popularTools").innerHTML=[["List orders",84,78],["List products",67,61],["Create product",42,42],["Search messages",25,24]].map(t=>`<div><div class="tool"><div class="tool-icon">⌘</div><div class="tool-info"><strong>${t[0]}</strong><small>${t[1]*10} calls</small></div><span class="tool-count">${t[1]}%</span></div><div class="bar"><i style="width:${t[2]}%"></i></div></div>`).join("");
+}
+function renderTools(){
+ const q=(document.getElementById("toolSearch")?.value||"").toLowerCase();
+ document.getElementById("toolRows").innerHTML=tools.filter(t=>(t.join(" ").toLowerCase().includes(q))).map(t=>`<tr><td>${t[0]}</td><td>${t[1]}</td><td>${t[2]}</td><td><span class="pill">Available</span></td></tr>`).join("");
+}
+function renderAudit(){
+ const q=(document.getElementById("auditSearch")?.value||"").toLowerCase();
+ document.getElementById("auditRows").innerHTML=events.filter(e=>(Object.values(e).join(" ").toLowerCase().includes(q))).map(e=>`<tr><td>${e.tool}</td><td>${e.user}</td><td>${e.server}</td><td>${e.duration}</td><td>${result(e)}</td><td>${e.time}</td></tr>`).join("");
+}
+function renderKeys(){
+ document.getElementById("keyRows").innerHTML=keys.map((k,i)=>`<tr><td>${k.name}</td><td>${k.owner}</td><td>${k.created}</td><td>${k.last}</td><td><span class="pill" style="${k.active?'':'background:#35202a;border-color:#66333e;color:var(--red)'}">${k.active?'Active':'Revoked'}</span></td><td><button class="secondary" style="padding:6px 9px" onclick="revokeKey(${i})" ${k.active?'':'disabled'}>Revoke</button></td></tr>`).join("");
+}
+function toggleServer(id){
+ const s=servers.find(x=>x.id===id);s.enabled=!s.enabled;
+ renderServers();renderTools();
+}
+function showView(id){
+ document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===id));
+ document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("active",n.dataset.view===id));
+ const labels={overview:"Overview",servers:"MCP Servers",tools:"Tools",audit:"Audit Logs",keys:"API Keys",team:"Team Members",settings:"Settings"};
+ document.getElementById("crumb").textContent=labels[id]||"Overview";
+ if(id==="tools")renderTools();if(id==="audit")renderAudit();if(id==="keys")renderKeys();
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+document.querySelectorAll(".nav").forEach(n=>n.addEventListener("click",()=>showView(n.dataset.view)));
+function addServer(){
+ const name=prompt("Server name for this visual preview:");
+ if(!name)return;
+ if(servers.some(s=>s.name.toLowerCase()===name.toLowerCase())){alert("A server with that name already exists.");return;}
+ servers.push({id:"custom"+Date.now(),name,desc:"Custom upstream server",icon:"◇",url:"Not configured",tools:0,enabled:false});
+ renderServers();showView("servers");
+}
+function createKey(){
+ const name=prompt("API key label:");
+ if(!name)return;
+ keys.push({name,owner:"Workspace Admin",created:"Today",last:"Never",active:true});
+ renderKeys();showView("keys");
+ alert("Preview key entry created only. No real credential was generated.");
+}
+function revokeKey(i){
+ if(!confirm("Revoke this preview key entry?"))return;
+ keys[i].active=false;renderKeys();
+}
+renderServers();renderRecent();renderTools();renderAudit();renderKeys();
+</script>
+</body>
+</html>

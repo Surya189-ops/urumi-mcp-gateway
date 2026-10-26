@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WooCommerceClient } from "./woocommerce-client.js";
 
-test("sends WooCommerce credentials in Authorization, not the URL", async () => {
+async function withCredentials(
+  url: string,
+  run: (capturedUrl: string, authorization: string | null) => void,
+) {
   const originalFetch = globalThis.fetch;
   const previous = {
     url: process.env.WOOCOMMERCE_URL,
@@ -10,18 +13,16 @@ test("sends WooCommerce credentials in Authorization, not the URL", async () => 
     secret: process.env.WOOCOMMERCE_CONSUMER_SECRET,
   };
 
-  process.env.WOOCOMMERCE_URL = "http://127.0.0.1:8080";
+  process.env.WOOCOMMERCE_URL = url;
   process.env.WOOCOMMERCE_CONSUMER_KEY = "test_key";
   process.env.WOOCOMMERCE_CONSUMER_SECRET = "test_secret";
 
   let capturedUrl = "";
-  let capturedAuthorization: string | null = null;
+  let authorization: string | null = null;
 
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     capturedUrl = String(input);
-    const headers = new Headers(init?.headers);
-    capturedAuthorization = headers.get("Authorization");
-
+    authorization = new Headers(init?.headers).get("Authorization");
     return new Response(JSON.stringify([{ id: 1, name: "Test product" }]), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -34,13 +35,8 @@ test("sends WooCommerce credentials in Authorization, not the URL", async () => 
       "products",
       { query: { page: 1, per_page: 5 } },
     );
-
     assert.equal(products[0]?.name, "Test product");
-    assert.ok(capturedAuthorization?.startsWith("OAuth "));
-    assert.ok(!capturedUrl.includes("test_key"));
-    assert.ok(!capturedUrl.includes("test_secret"));
-    assert.ok(!capturedUrl.includes("consumer_key"));
-    assert.ok(!capturedUrl.includes("consumer_secret"));
+    run(capturedUrl, authorization);
   } finally {
     globalThis.fetch = originalFetch;
     for (const [name, value] of [
@@ -52,4 +48,24 @@ test("sends WooCommerce credentials in Authorization, not the URL", async () => 
       else process.env[name] = value;
     }
   }
+}
+
+test("uses query-string OAuth for plain HTTP WooCommerce", async () => {
+  await withCredentials("http://127.0.0.1:8080", (capturedUrl, authorization) => {
+    const url = new URL(capturedUrl);
+    assert.equal(url.searchParams.get("oauth_consumer_key"), "test_key");
+    assert.ok(url.searchParams.get("oauth_signature"));
+    assert.equal(url.searchParams.get("consumer_secret"), null);
+    assert.equal(authorization, null);
+  });
+});
+
+test("uses Authorization OAuth for HTTPS WooCommerce", async () => {
+  await withCredentials("https://store.example.test", (capturedUrl, authorization) => {
+    const url = new URL(capturedUrl);
+    assert.ok(authorization?.startsWith("OAuth "));
+    assert.equal(url.searchParams.get("oauth_consumer_key"), null);
+    assert.equal(url.searchParams.get("oauth_signature"), null);
+    assert.ok(!capturedUrl.includes("test_secret"));
+  });
 });

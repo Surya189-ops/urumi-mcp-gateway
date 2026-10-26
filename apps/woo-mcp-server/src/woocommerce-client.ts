@@ -55,6 +55,35 @@ export class WooCommerceClient {
     this.consumerSecret = secret;
   }
 
+  private signOAuth(method: string, url: URL): string {
+    const oauth: Record<string, string> = {
+      oauth_consumer_key: this.consumerKey,
+      oauth_nonce: randomBytes(16).toString("hex"),
+      oauth_signature_method: "HMAC-SHA256",
+      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+      oauth_version: "1.0",
+    };
+
+    const parameters = [
+      ...Array.from(url.searchParams.entries()),
+      ...Object.entries(oauth),
+    ]
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .map(([key, value]) => encode(`${key}=${value}`));
+
+    const normalized = parameters.join("%26");
+    const baseUrl = `${url.protocol}//${url.host}${url.pathname}`;
+    const baseString = [
+      method.toUpperCase(),
+      encode(baseUrl),
+      normalized,
+    ].join("&");
+
+    return createHmac("sha256", `${encode(this.consumerSecret)}&`)
+      .update(baseString)
+      .digest("base64");
+  }
+
   private authorization(method: string, url: URL): string {
     const oauth: Record<string, string> = {
       oauth_consumer_key: this.consumerKey,
@@ -67,24 +96,24 @@ export class WooCommerceClient {
     const parameters = [
       ...Array.from(url.searchParams.entries()),
       ...Object.entries(oauth),
-    ].map(([key, value]) => [encode(key), encode(value)] as const)
-      .sort(([ak, av], [bk, bv]) => ak.localeCompare(bk) || av.localeCompare(bv));
+    ]
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .map(([key, value]) => encode(`${key}=${value}`));
 
-    const normalized = parameters.map(([key, value]) => `${key}=${value}`).join("&");
     const baseUrl = `${url.protocol}//${url.host}${url.pathname}`;
     const baseString = [
       method.toUpperCase(),
       encode(baseUrl),
-      encode(normalized),
+      parameters.join("%26"),
     ].join("&");
-    const signature = createHmac("sha256", `${encode(this.consumerSecret)}&`)
-      .update(baseString)
-      .digest("base64");
 
-    oauth.oauth_signature = signature;
+    oauth.oauth_signature = createHmac(
+      "sha256",
+      `${encode(this.consumerSecret)}&`,
+    ).update(baseString).digest("base64");
 
     return `OAuth ${Object.entries(oauth)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
       .map(([key, value]) => `${encode(key)}="${encode(value)}"`)
       .join(", ")}`;
   }
@@ -108,12 +137,50 @@ export class WooCommerceClient {
     const timeout = setTimeout(() => controller.abort(), 10_000);
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (url.protocol === "http:") {
+        // WooCommerce requires OAuth parameters in the URL for plain HTTP.
+        const oauthParams: Record<string, string> = {
+          oauth_consumer_key: this.consumerKey,
+          oauth_nonce: randomBytes(16).toString("hex"),
+          oauth_signature_method: "HMAC-SHA256",
+          oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+          oauth_version: "1.0",
+        };
+
+        const parameters = [
+          ...Array.from(url.searchParams.entries()),
+          ...Object.entries(oauthParams),
+        ]
+          .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+          .map(([key, value]) => encode(`${key}=${value}`));
+
+        const baseUrl = `${url.protocol}//${url.host}${url.pathname}`;
+        const baseString = [
+          method.toUpperCase(),
+          encode(baseUrl),
+          parameters.join("%26"),
+        ].join("&");
+
+        const signature = createHmac(
+          "sha256",
+          `${encode(this.consumerSecret)}&`,
+        ).update(baseString).digest("base64");
+
+        for (const [key, value] of Object.entries(oauthParams)) {
+          url.searchParams.set(key, value);
+        }
+        url.searchParams.set("oauth_signature", signature);
+      } else {
+        headers.Authorization = this.authorization(method, url);
+      }
+
       const response = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: this.authorization(method, url),
-        },
+        headers,
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
         signal: controller.signal,
       });
